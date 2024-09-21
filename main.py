@@ -88,6 +88,46 @@ def open_file_dialog():
     return filename
 
 
+# 判题按钮回调函数
+def on_grade():
+    exercise_file = open_file_dialog()
+    answer_file = open_file_dialog()
+    if not exercise_file or not answer_file:
+        messagebox.showerror("文件错误", "请选择有效的题目文件和答案文件。")
+        return
 
+    with open(exercise_file, 'r') as ef, open(answer_file, 'r') as af:
+        exercises = ef.readlines()
+        answers = af.readlines()
+
+    correct = []
+    wrong = []
+    invalid = []  # 用于存储无效的题目编号
+    for i, (e, a) in enumerate(zip(exercises, answers), 1):
+        expr = e.split('=')[0].strip()
+
+        # 检查题目是否合法
+        if not is_valid_expression(expr):
+            invalid.append(i)
+            continue  # 跳过这道题的批改
+
+        # 如果题目有效，继续判题
+        if evaluate_expression(expr) == Fraction(a):
+            correct.append(i)
+        else:
+            wrong.append(i)
+
+    with open('Grade.txt', 'w') as gf:
+        gf.write(f"Correct: {len(correct)} ({', '.join(map(str, correct))})\n")
+        gf.write(f"Wrong: {len(wrong)} ({', '.join(map(str, wrong))})\n")
+        if invalid:
+            gf.write(f"Invalid: {len(invalid)} ({', '.join(map(str, invalid))})\n")
+
+    result_text.delete(1.0, tk.END)
+    result_text.insert(tk.END, f"判题结果:\nCorrect: {len(correct)} ({', '.join(map(str, correct))})\n")
+    result_text.insert(tk.END, f"Wrong: {len(wrong)} ({', '.join(map(str, wrong))})\n")
+    if invalid:
+        result_text.insert(tk.END, f"Invalid: {len(invalid)} ({', '.join(map(str, invalid))})\n")
+    messagebox.showinfo("判题结果", "判题完成，结果已保存到Grade.txt。")
 
 
