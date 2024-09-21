@@ -79,7 +79,25 @@ def generate_exercises(n, r):
     return exercises, answers
 
 
+# 生成按钮回调函数
+def on_generate():
+    try:
+        n = int(entry_num.get())
+        r = int(entry_range.get())
+        if n <= 0 or r <= 0:
+            raise ValueError
+    except ValueError:
+        messagebox.showerror("输入错误", "请输入有效的正整数。")
+        return
 
+    exercises, answers = generate_exercises(n, r)
+    with open("Exercises.txt", 'w') as ef, open("Answers.txt", 'w') as af:
+        ef.write("\n".join(exercises))
+        af.write("\n".join(answers))
+
+    result_text.delete(1.0, tk.END)
+    result_text.insert(tk.END, "生成题目:\n" + "\n".join(exercises))
+    messagebox.showinfo("成功", "题目和答案已生成，结果已保存到Exercises.txt和Answers.txt。")
 
 
 # 打开文件
@@ -128,6 +146,40 @@ def on_grade():
     result_text.insert(tk.END, f"Wrong: {len(wrong)} ({', '.join(map(str, wrong))})\n")
     if invalid:
         result_text.insert(tk.END, f"Invalid: {len(invalid)} ({', '.join(map(str, invalid))})\n")
-    messagebox.showinfo("判题结果", "判题完成，结果已保存到Grade.txt。")
+    messagebox.showinfo("判题结果", "判题完成，结果已保存到Grade.txt")
 
 
+# 创建主界面
+root = tk.Tk()
+root.title("四则运算题目生成器")
+
+# 生成题目的设置
+frame_generate = tk.Frame(root)
+frame_generate.pack(pady=10)
+
+label_num = tk.Label(frame_generate, text="题目数量:")
+label_num.grid(row=0, column=0, padx=5, pady=5)
+entry_num = tk.Entry(frame_generate)
+entry_num.grid(row=0, column=1, padx=5, pady=5)
+
+label_range = tk.Label(frame_generate, text="数值上届:")
+label_range.grid(row=1, column=0, padx=5, pady=5)
+entry_range = tk.Entry(frame_generate)
+entry_range.grid(row=1, column=1, padx=5, pady=5)
+
+button_generate = tk.Button(frame_generate, text="生成题目", command=on_generate)
+button_generate.grid(row=2, columnspan=2, padx=5, pady=5)
+
+# 判题功能
+frame_grade = tk.Frame(root)
+frame_grade.pack(pady=10)
+
+button_grade = tk.Button(frame_grade, text="判题", command=on_grade)
+button_grade.pack()
+
+# 显示结果
+result_text = tk.Text(root, height=15, width=50)
+result_text.pack(padx=10, pady=10)
+
+# 运行主循环
+root.mainloop()
