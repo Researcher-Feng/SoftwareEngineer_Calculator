@@ -3,7 +3,11 @@ from tkinter import filedialog, messagebox
 import random
 from fractions import Fraction
 import re
+
+from jupyter_client.session import msg_header
+
 ops = ['+', '-', '*', '÷']
+quick_dict = {0: 0, 1: 0, 2: 6, 3: 72, 4: 576, 5: 2880, 6: 8640, 7: 20160, 8: 40320, 9: 72576}
 gen_count = 0
 gen_result = []
 
@@ -40,14 +44,31 @@ def generate_expression_dp(numbers, operators, start, end, dp, op_count, max_gen
     dp[(start, end, op_count)] = result
     return result
 
+
+# 修改后的生成表达式函数
 def generate_unique_expressions_dp(r, count=5):
     global ops
     global gen_result
-    numbers = list(range(1, r))
+    numbers = list(range(1, r+1))
     expression_set = set()
     dp = {}
+    count = limit_judge(r, count)
+
+    if r == 2:
+        # 当只有2个数字时，生成4个不同的表达式
+        a, b = numbers
+        expressions = [f"{a} {op} {b}" for op in ops]
+        random.seed()
+        random.shuffle(expressions)
+        expressions += [f"{b} {op} {a}" for op in ops if op in ['-', '÷']]  # 处理非交换律运算符
+        random.shuffle(expressions)
+        gen_result.extend(expressions)
+        return set(expressions[:count])  # 限制生成的数量
+
     while len(expression_set) < count:
+        random.seed()
         random.shuffle(numbers)
+        random.shuffle(ops)
         expr_list = generate_expression_dp(numbers, ops, 0, len(numbers) - 1, dp, 0, count)
         if expr_list == -1:
             for i_gen in gen_result:
@@ -55,32 +76,22 @@ def generate_unique_expressions_dp(r, count=5):
     return expression_set
 
 
-# 生成表达式
-def generate_expression(r):
-    global ops
-    # 生成一个数字
-    def generate_number():
-        # 为分数加上括号，确保计算时优先级正确
-        if random.choice([True, False]):
-            return str(random.randint(1, r - 1))
-        else:
-            numerator = random.randint(1, r - 1)
-            denominator = random.randint(2, r - 1)
-            return f"({numerator}/{denominator})"  # 用括号包裹分数
-    # 除法运算使用 ÷ 号
-    # 生成一个数字
-    expression = generate_number()
-    # 最多生成三个运算符
-    for _ in range(random.randint(1, 3)):  # 最多3个运算符
-        op = random.choice(ops)
-        # 生成一个数字
-        next_num = generate_number()
-        # 如果随机数为真，则将运算符放在数字前面
-        if random.choice([True, False]):
-            expression = f"({expression} {op} {next_num})"
-        else:
-            expression += f" {op} {next_num}"
-    return expression
+# 判断输入的数字是否超出了预先生成的限制
+def limit_judge(r, count):
+    # 首先从quick_dict字典中获取到当前字符的限制数量
+    limit = quick_dict[r]
+    # 如果输入的数字数量大于限制数量，则警告
+    if count > limit:
+        limit_error(r, limit)
+        return limit
+    # 否则，返回输入的数字数量
+    else:
+        return count
+
+
+def limit_error(r, limit):
+    messagebox.showerror("输入错误",
+                         f"使用 {r} 个不同的数字，最多只可以生成 {limit} 个不同的算式。下面生成能力范围内的算式。")
 
 
 # 手动解析和计算表达式，使用 Fraction 来保证分数精度
@@ -111,13 +122,10 @@ def eval_expr(expr):
 # 检查题目格式和合法性
 def is_valid_expression(expr):
     valid_pattern = r"^[\d\s\+\-\*÷/\(\)']+$"
-
     if not re.match(valid_pattern, expr):
         return False
-
     if expr.count('(') != expr.count(')'):
         return False
-
     try:
         result = evaluate_expression(expr)
         if result is None:
@@ -130,10 +138,12 @@ def is_valid_expression(expr):
 
 # 生成题目和答案
 def generate_exercises(n, r):
+    global gen_result
     exercises = []
     answers = []
     seen_expressions = set()  # 防止重复
 
+    gen_result.clear()
     expr_t = generate_unique_expressions_dp(r, n)
     for i_t in expr_t:
         answer = evaluate_expression(i_t)
@@ -143,16 +153,6 @@ def generate_exercises(n, r):
                 exercises.append(i_t + " = ")
                 answers.append(str(answer))  # 用分数输出答案
                 seen_expressions.add(normalized_expr)
-
-    # while len(exercises) < n:
-    #     expr = generate_expression(r)
-    #     answer = evaluate_expression(expr)
-    #     if answer is not None:
-    #         normalized_expr = expr.replace(" ", "")
-    #         if normalized_expr not in seen_expressions:
-    #             exercises.append(expr + " = ")
-    #             answers.append(str(answer))  # 用分数输出答案
-    #             seen_expressions.add(normalized_expr)
     return exercises, answers
 
 
@@ -178,23 +178,21 @@ def on_generate():
 
 
 # 打开文件
-def open_file_dialog():
-    filename = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
+def open_file_dialog(msg_string):
+    filename = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")], title=msg_string)
     return filename
 
 
 # 判题按钮回调函数
 def on_grade():
-    exercise_file = open_file_dialog()
-    answer_file = open_file_dialog()
+    exercise_file = open_file_dialog('选择题目文件')
+    answer_file = open_file_dialog('选择答案文件')
     if not exercise_file or not answer_file:
         messagebox.showerror("文件错误", "请选择有效的题目文件和答案文件。")
         return
-
-    with open(exercise_file, 'r') as ef, open(answer_file, 'r') as af:
+    with open(exercise_file, 'r', encoding='utf-8') as ef, open(answer_file, 'r', encoding='utf-8') as af:
         exercises = ef.readlines()
         answers = af.readlines()
-
     correct = []
     wrong = []
     invalid = []  # 用于存储无效的题目编号
@@ -239,7 +237,7 @@ label_num.grid(row=0, column=0, padx=5, pady=5)
 entry_num = tk.Entry(frame_generate)
 entry_num.grid(row=0, column=1, padx=5, pady=5)
 
-label_range = tk.Label(frame_generate, text="数值范围:")
+label_range = tk.Label(frame_generate, text="最大数值:")
 label_range.grid(row=1, column=0, padx=5, pady=5)
 entry_range = tk.Entry(frame_generate)
 entry_range.grid(row=1, column=1, padx=5, pady=5)
