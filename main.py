@@ -3,23 +3,79 @@ from tkinter import filedialog, messagebox
 import random
 from fractions import Fraction
 import re
+ops = ['+', '-', '*', '÷']
+gen_count = 0
+gen_result = []
+
+
+# 使用动态规划生成表达式，限制最多包含三个运算符
+def generate_expression_dp(numbers, operators, start, end, dp, op_count, max_gen):
+    global gen_count
+    global gen_result
+    if start == end:
+        return [str(numbers[start])]
+
+    if (start, end, op_count) in dp:
+        return dp[(start, end, op_count)]
+
+    result = []
+    # 递归的前提是运算符的数量没有超过3
+    if op_count < 3:
+        for i in range(start, end):
+            left_exprs = generate_expression_dp(numbers, operators, start, i, dp, op_count, max_gen)
+            if left_exprs == -1:
+                return -1
+            right_exprs = generate_expression_dp(numbers, operators, i + 1, end, dp, op_count, max_gen)
+            if right_exprs == -1:
+                return -1
+            for left in left_exprs:
+                for right in right_exprs:
+                    for op in operators:
+                        result.append(f"({left} {op} {right})")
+                        gen_result.append(f"({left} {op} {right})")
+                        if len(gen_result) >= max_gen:
+                            gen_result = gen_result[:max_gen]
+                            return -1
+
+    dp[(start, end, op_count)] = result
+    return result
+
+def generate_unique_expressions_dp(r, count=5):
+    global ops
+    global gen_result
+    numbers = list(range(1, r))
+    expression_set = set()
+    dp = {}
+    while len(expression_set) < count:
+        random.shuffle(numbers)
+        expr_list = generate_expression_dp(numbers, ops, 0, len(numbers) - 1, dp, 0, count)
+        if expr_list == -1:
+            for i_gen in gen_result:
+                expression_set.add(i_gen)
+    return expression_set
 
 
 # 生成表达式
 def generate_expression(r):
+    global ops
+    # 生成一个数字
     def generate_number():
+        # 为分数加上括号，确保计算时优先级正确
         if random.choice([True, False]):
             return str(random.randint(1, r - 1))
         else:
             numerator = random.randint(1, r - 1)
             denominator = random.randint(2, r - 1)
-            return f"{numerator}/{denominator}"
-
-    ops = ['+', '-', '*', '/']
+            return f"({numerator}/{denominator})"  # 用括号包裹分数
+    # 除法运算使用 ÷ 号
+    # 生成一个数字
     expression = generate_number()
+    # 最多生成三个运算符
     for _ in range(random.randint(1, 3)):  # 最多3个运算符
         op = random.choice(ops)
+        # 生成一个数字
         next_num = generate_number()
+        # 如果随机数为真，则将运算符放在数字前面
         if random.choice([True, False]):
             expression = f"({expression} {op} {next_num})"
         else:
@@ -27,31 +83,41 @@ def generate_expression(r):
     return expression
 
 
-# 计算表达式并返回分数
+# 手动解析和计算表达式，使用 Fraction 来保证分数精度
 def evaluate_expression(expr):
     try:
-        # 用Fraction来计算结果，避免浮点数运算
-        return Fraction(eval(expr.replace("/", " / "), {"__builtins__": None}, {"Fraction": Fraction}))
+        # 将 ÷ 替换为 / 并计算
+        expr = expr.replace("÷", "/")
+        return eval_expr(expr)
     except ZeroDivisionError:
         return None
     except Exception:
         return None
 
 
+# 使用 Fraction 进行 eval 运算，避免使用浮点数
+def eval_expr(expr):
+    # 安全地用正则表达式提取出运算符和数值，并将数值转换为 Fraction
+    expr = expr.replace(" ", "")
+    expr = re.sub(r'(\d+)', r'Fraction("\1")', expr)  # 替换为 Fraction 类型
+    expr = re.sub(r'\((\d+)/(\d+)\)', r'Fraction("\1", "\2")', expr)  # 真分数解析并加括号
+    try:
+        result = eval(expr, {"__builtins__": None}, {"Fraction": Fraction})
+        return result
+    except ZeroDivisionError:
+        return None
+
+
 # 检查题目格式和合法性
 def is_valid_expression(expr):
-    # 正则表达式匹配合法的自然数、真分数、运算符、括号
-    valid_pattern = r"^[\d\s\+\-\*/\(\)']+$"
+    valid_pattern = r"^[\d\s\+\-\*÷/\(\)']+$"
 
-    # 检查格式是否符合
     if not re.match(valid_pattern, expr):
         return False
 
-    # 检查括号配对是否正确
     if expr.count('(') != expr.count(')'):
         return False
 
-    # 检查除以零的情况
     try:
         result = evaluate_expression(expr)
         if result is None:
@@ -67,15 +133,26 @@ def generate_exercises(n, r):
     exercises = []
     answers = []
     seen_expressions = set()  # 防止重复
-    while len(exercises) < n:
-        expr = generate_expression(r)
-        answer = evaluate_expression(expr.replace("/", " / "))
-        if answer is not None and answer >= 0:
-            normalized_expr = expr.replace(" ", "")
+
+    expr_t = generate_unique_expressions_dp(r, n)
+    for i_t in expr_t:
+        answer = evaluate_expression(i_t)
+        if answer is not None:
+            normalized_expr = i_t.replace(" ", "")
             if normalized_expr not in seen_expressions:
-                exercises.append(expr + " = ")
-                answers.append(str(answer))  # 直接用分数形式输出答案
+                exercises.append(i_t + " = ")
+                answers.append(str(answer))  # 用分数输出答案
                 seen_expressions.add(normalized_expr)
+
+    # while len(exercises) < n:
+    #     expr = generate_expression(r)
+    #     answer = evaluate_expression(expr)
+    #     if answer is not None:
+    #         normalized_expr = expr.replace(" ", "")
+    #         if normalized_expr not in seen_expressions:
+    #             exercises.append(expr + " = ")
+    #             answers.append(str(answer))  # 用分数输出答案
+    #             seen_expressions.add(normalized_expr)
     return exercises, answers
 
 
@@ -91,13 +168,13 @@ def on_generate():
         return
 
     exercises, answers = generate_exercises(n, r)
-    with open("Exercises.txt", 'w') as ef, open("Answers.txt", 'w') as af:
+    with open("Exercises.txt", 'w', encoding='utf-8') as ef, open("Answers.txt", 'w', encoding='utf-8') as af:
         ef.write("\n".join(exercises))
         af.write("\n".join(answers))
 
     result_text.delete(1.0, tk.END)
     result_text.insert(tk.END, "生成题目:\n" + "\n".join(exercises))
-    messagebox.showinfo("成功", "题目和答案已生成，结果已保存到Exercises.txt和Answers.txt。")
+    messagebox.showinfo("成功", "题目和答案已生成。")
 
 
 # 打开文件
@@ -130,7 +207,7 @@ def on_grade():
             continue  # 跳过这道题的批改
 
         # 如果题目有效，继续判题
-        if evaluate_expression(expr) == Fraction(a):
+        if str(evaluate_expression(expr)) == a.strip():
             correct.append(i)
         else:
             wrong.append(i)
@@ -146,7 +223,7 @@ def on_grade():
     result_text.insert(tk.END, f"Wrong: {len(wrong)} ({', '.join(map(str, wrong))})\n")
     if invalid:
         result_text.insert(tk.END, f"Invalid: {len(invalid)} ({', '.join(map(str, invalid))})\n")
-    messagebox.showinfo("判题结果", "判题完成，结果已保存到Grade.txt")
+    messagebox.showinfo("判题结果", "判题完成，结果已保存到Grade.txt。")
 
 
 # 创建主界面
@@ -162,7 +239,7 @@ label_num.grid(row=0, column=0, padx=5, pady=5)
 entry_num = tk.Entry(frame_generate)
 entry_num.grid(row=0, column=1, padx=5, pady=5)
 
-label_range = tk.Label(frame_generate, text="数值上届:")
+label_range = tk.Label(frame_generate, text="数值范围:")
 label_range.grid(row=1, column=0, padx=5, pady=5)
 entry_range = tk.Entry(frame_generate)
 entry_range.grid(row=1, column=1, padx=5, pady=5)
