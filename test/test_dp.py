@@ -1,5 +1,5 @@
 import unittest
-from main import generate_expression_dp
+from old.main2 import generate_expression_dp
 
 
 class TestGenerateExpressionDP(unittest.TestCase):

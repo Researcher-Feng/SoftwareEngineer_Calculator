@@ -1,7 +1,5 @@
-import re
 import unittest
-from fractions import Fraction
-from main import eval_expr
+from old.main2 import eval_expr
 
 
 class TestEvalExpr(unittest.TestCase):

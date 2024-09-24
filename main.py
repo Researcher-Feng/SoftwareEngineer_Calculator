@@ -1,100 +1,45 @@
+import time
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
 import random
 from fractions import Fraction
 import re
-
-from jupyter_client.session import msg_header
-
-ops = ['+', '-', '*', '÷']
-quick_dict = {0: 0, 1: 0, 2: 6, 3: 72, 4: 576, 5: 2880, 6: 8640, 7: 20160, 8: 40320, 9: 72576}
-gen_count = 0
-gen_result = []
+ops = ['+', '-', '*', '/']
+ops_find = [' + ', ' - ', ' * ', ' / ']
+from line_profiler_pycharm import profile
 
 
-# 使用动态规划生成表达式，限制最多包含三个运算符
-def generate_expression_dp(numbers, operators, start, end, dp, op_count, max_gen):
-    global gen_count
-    global gen_result
-    if start == end:
-        return [str(numbers[start])]
-
-    if (start, end, op_count) in dp:
-        return dp[(start, end, op_count)]
-
-    result = []
-    # 递归的前提是运算符的数量没有超过3
-    if op_count < 3:
-        for i in range(start, end):
-            left_exprs = generate_expression_dp(numbers, operators, start, i, dp, op_count, max_gen)
-            if left_exprs == -1:
-                return -1
-            right_exprs = generate_expression_dp(numbers, operators, i + 1, end, dp, op_count, max_gen)
-            if right_exprs == -1:
-                return -1
-            for left in left_exprs:
-                for right in right_exprs:
-                    for op in operators:
-                        result.append(f"({left} {op} {right})")
-                        gen_result.append(f"({left} {op} {right})")
-                        if len(gen_result) >= max_gen:
-                            gen_result = gen_result[:max_gen]
-                            return -1
-
-    dp[(start, end, op_count)] = result
-    return result
-
-
-# 修改后的生成表达式函数
-def generate_unique_expressions_dp(r, count=5):
+# 生成表达式
+@profile
+def generate_expression(r):
     global ops
-    global gen_result
-    numbers = list(range(1, r+1))
-    expression_set = set()
-    dp = {}
-    count = limit_judge(r, count)
-
-    if r == 2:
-        # 当只有2个数字时，生成4个不同的表达式
-        a, b = numbers
-        expressions = [f"{a} {op} {b}" for op in ops]
-        random.seed()
-        random.shuffle(expressions)
-        expressions += [f"{b} {op} {a}" for op in ops if op in ['-', '÷']]  # 处理非交换律运算符
-        random.shuffle(expressions)
-        gen_result.extend(expressions)
-        return set(expressions[:count])  # 限制生成的数量
-
-    while len(expression_set) < count:
-        random.seed()
-        random.shuffle(numbers)
-        random.shuffle(ops)
-        expr_list = generate_expression_dp(numbers, ops, 0, len(numbers) - 1, dp, 0, count)
-        if expr_list == -1:
-            for i_gen in gen_result:
-                expression_set.add(i_gen)
-    return expression_set
-
-
-# 判断输入的数字是否超出了预先生成的限制
-def limit_judge(r, count):
-    # 首先从quick_dict字典中获取到当前字符的限制数量
-    limit = quick_dict[r]
-    # 如果输入的数字数量大于限制数量，则警告
-    if count > limit:
-        limit_error(r, limit)
-        return limit
-    # 否则，返回输入的数字数量
-    else:
-        return count
-
-
-def limit_error(r, limit):
-    messagebox.showerror("输入错误",
-                         f"使用 {r} 个不同的数字，最多只可以生成 {limit} 个不同的算式。下面生成能力范围内的算式。")
+    def generate_number():
+        if random.choice([True, False]):
+            return str(random.randint(1, r))
+        else:
+            numerator = random.randint(1, r)
+            denominator = random.randint(2, r)
+            return f"{numerator}/{denominator}"
+    expression = generate_number()
+    for _ in range(random.randint(1, 3)):  # 最多3个运算符
+        op = random.choice(ops)
+        next_num = generate_number()
+        if random.choice([True, False]):
+            expression = f"({expression} {op} {next_num})"
+        else:
+            expression += f" {op} {next_num}"
+    expression_list = []
+    for i_op in ops_find:
+        op_index = expression.find(i_op)
+        if op_index != -1:
+            for r_op in ops_find:
+                r_expression = expression.replace(i_op, r_op)
+                expression_list.append(r_expression)
+    return expression_list
 
 
 # 手动解析和计算表达式，使用 Fraction 来保证分数精度
+@profile
 def evaluate_expression(expr):
     try:
         # 将 ÷ 替换为 / 并计算
@@ -107,6 +52,7 @@ def evaluate_expression(expr):
 
 
 # 使用 Fraction 进行 eval 运算，避免使用浮点数
+@profile
 def eval_expr(expr):
     # 安全地用正则表达式提取出运算符和数值，并将数值转换为 Fraction
     expr = expr.replace(" ", "")
@@ -120,12 +66,20 @@ def eval_expr(expr):
 
 
 # 检查题目格式和合法性
+@profile
 def is_valid_expression(expr):
-    valid_pattern = r"^[\d\s\+\-\*÷/\(\)']+$"
+    # 正则表达式匹配合法的自然数、真分数、运算符、括号
+    valid_pattern = r"^[\d\s\+\-\*/\(\)']+$"
+
+    # 检查格式是否符合
     if not re.match(valid_pattern, expr):
         return False
+
+    # 检查括号配对是否正确
     if expr.count('(') != expr.count(')'):
         return False
+
+    # 检查除以零的情况
     try:
         result = evaluate_expression(expr)
         if result is None:
@@ -137,62 +91,102 @@ def is_valid_expression(expr):
 
 
 # 生成题目和答案
+@profile
 def generate_exercises(n, r):
-    global gen_result
     exercises = []
     answers = []
-    seen_expressions = set()  # 防止重复
+    answer_set = set()
 
-    gen_result.clear()
-    expr_t = generate_unique_expressions_dp(r, n)
-    for i_t in expr_t:
-        answer = evaluate_expression(i_t)
-        if answer is not None:
-            normalized_expr = i_t.replace(" ", "")
-            if normalized_expr not in seen_expressions:
-                exercises.append(i_t + " = ")
-                answers.append(str(answer))  # 用分数输出答案
-                seen_expressions.add(normalized_expr)
+    # 创建 Tkinter 窗口
+    root = tk.Tk()
+    root.title("加载中...")
+    progress = ttk.Progressbar(root, orient="horizontal", length=300, mode="determinate")
+    progress.pack(pady=20)
+    progress['value'] = 0
+    progress['maximum'] = n
+
+    # 防止重复
+    start_time = time.time()
+    while len(answer_set) < n:
+
+        progress['value'] += 4  # 更新进度条
+        time.sleep(0.002)
+        root.update()  # 更新窗口以反映进度条变化
+
+        current_time = time.time()
+        if current_time - start_time >= 60:
+            raise_callback_msg()
+            return -1, -1
+        expr_list = generate_expression(r)
+        for expr in expr_list:
+            answer = evaluate_expression(expr.replace("/", " / "))
+
+            if n < 1000:
+                if answer in answer_set:
+                    progress['value'] -= 1
+                    continue
+            if answer is not None and answer >= 0:
+                exercises.append(expr + " = ")
+                answers.append(str(answer))  # 直接用分数形式输出答案
+                answer_set.add(str(answer))
+            else:
+                progress['value'] -= 1
+                continue
+
+    progress['value'] = n
+    root.destroy()  # 关闭窗口
     return exercises, answers
 
 
+@profile
+def raise_callback_msg():
+    messagebox.showerror("输入错误", "无法生成足够的题目。请检查输入的题目数量与数值上届，并重新输入。")
+
+
 # 生成按钮回调函数
+@profile
 def on_generate():
     try:
         n = int(entry_num.get())
         r = int(entry_range.get())
-        if n <= 0 or r <= 0:
+        if n <= 0 or r >= 10 or r <= 0:
             raise ValueError
     except ValueError:
-        messagebox.showerror("输入错误", "请输入有效的正整数。")
+        messagebox.showerror("输入错误", "请输入10以内有效的正整数。")
         return
 
     exercises, answers = generate_exercises(n, r)
-    with open("Exercises.txt", 'w', encoding='utf-8') as ef, open("Answers.txt", 'w', encoding='utf-8') as af:
+    if exercises == -1:
+        return
+    with open("Exercises.txt", 'w') as ef, open("Answers.txt", 'w') as af:
         ef.write("\n".join(exercises))
         af.write("\n".join(answers))
 
     result_text.delete(1.0, tk.END)
     result_text.insert(tk.END, "生成题目:\n" + "\n".join(exercises))
-    messagebox.showinfo("成功", "题目和答案已生成。")
+    messagebox.showinfo("成功", "题目和答案已生成，结果已保存到Exercises.txt和Answers.txt。")
 
 
 # 打开文件
+@profile
 def open_file_dialog(msg_string):
     filename = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")], title=msg_string)
     return filename
 
 
 # 判题按钮回调函数
+@profile
 def on_grade():
     exercise_file = open_file_dialog('选择题目文件')
     answer_file = open_file_dialog('选择答案文件')
     if not exercise_file or not answer_file:
         messagebox.showerror("文件错误", "请选择有效的题目文件和答案文件。")
         return
-    with open(exercise_file, 'r', encoding='utf-8') as ef, open(answer_file, 'r', encoding='utf-8') as af:
+
+    with open(exercise_file, 'r') as ef, open(answer_file, 'r') as af:
         exercises = ef.readlines()
         answers = af.readlines()
+
     correct = []
     wrong = []
     invalid = []  # 用于存储无效的题目编号
@@ -205,7 +199,7 @@ def on_grade():
             continue  # 跳过这道题的批改
 
         # 如果题目有效，继续判题
-        if str(evaluate_expression(expr)) == a.strip():
+        if evaluate_expression(expr) == Fraction(a):
             correct.append(i)
         else:
             wrong.append(i)
@@ -221,7 +215,7 @@ def on_grade():
     result_text.insert(tk.END, f"Wrong: {len(wrong)} ({', '.join(map(str, wrong))})\n")
     if invalid:
         result_text.insert(tk.END, f"Invalid: {len(invalid)} ({', '.join(map(str, invalid))})\n")
-    messagebox.showinfo("判题结果", "判题完成，结果已保存到Grade.txt。")
+    messagebox.showinfo("判题结果", "判题完成，结果已保存到Grade.txt")
 
 
 # 创建主界面
@@ -237,7 +231,7 @@ label_num.grid(row=0, column=0, padx=5, pady=5)
 entry_num = tk.Entry(frame_generate)
 entry_num.grid(row=0, column=1, padx=5, pady=5)
 
-label_range = tk.Label(frame_generate, text="最大数值:")
+label_range = tk.Label(frame_generate, text="数值上届:")
 label_range.grid(row=1, column=0, padx=5, pady=5)
 entry_range = tk.Entry(frame_generate)
 entry_range.grid(row=1, column=1, padx=5, pady=5)
