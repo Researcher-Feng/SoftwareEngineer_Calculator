@@ -110,12 +110,13 @@ def generate_exercises(n, r):
     while len(answer_set) < n:
 
         progress['value'] += 4  # 更新进度条
-        time.sleep(0.002)
+        # time.sleep(0.002)
         root.update()  # 更新窗口以反映进度条变化
 
         current_time = time.time()
-        if current_time - start_time >= 60:
+        if current_time - start_time >= 1200:
             raise_callback_msg()
+            root.destroy()  # 关闭窗口
             return -1, -1
         expr_list = generate_expression(r)
         for expr in expr_list:
