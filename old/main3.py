@@ -54,15 +54,21 @@ def evaluate_expression(expr):
 # 使用 Fraction 进行 eval 运算，避免使用浮点数
 @profile
 def eval_expr(expr):
-    # 安全地用正则表达式提取出运算符和数值，并将数值转换为 Fraction
-    expr = expr.replace(" ", "")
-    expr = re.sub(r'(\d+)', r'Fraction("\1")', expr)  # 替换为 Fraction 类型
-    expr = re.sub(r'\((\d+)/(\d+)\)', r'Fraction("\1", "\2")', expr)  # 真分数解析并加括号
+    if '/' in expr:
+        expr = transform_string_format(expr)
     try:
         result = eval(expr, {"__builtins__": None}, {"Fraction": Fraction})
         return result
     except ZeroDivisionError:
         return None
+
+
+def transform_string_format(expr):
+    # 安全地用正则表达式提取出运算符和数值，并将数值转换为 Fraction
+    expr = expr.replace(" ", "")  # 真分数解析并加括号
+    expr = re.sub(r'(\d+)', r'Fraction("\1")', expr)  # 替换为 Fraction 类型
+    expr = re.sub(r'\((\d+)/(\d+)\)', r'Fraction("\1", "\2")', expr)
+    return expr
 
 
 # 检查题目格式和合法性
