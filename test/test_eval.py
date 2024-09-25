@@ -1,5 +1,5 @@
 import unittest
-from old.main2 import eval_expr
+from main import eval_expr
 
 
 class TestEvalExpr(unittest.TestCase):
