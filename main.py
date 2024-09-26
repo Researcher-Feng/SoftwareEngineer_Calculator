@@ -2,33 +2,116 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import random
 from fractions import Fraction
+import getopt
 import re
 from line_profiler_pycharm import profile
+import sys
+import logging
+import colorlog
+logger = None
+
+
+@profile
+# 彩色日志
+def color_logger():
+    log_colors_config = {
+        'DEBUG': 'white',  # cyan white
+        'INFO': 'green',
+        'WARNING': 'yellow',
+        'ERROR': 'red',
+        'CRITICAL': 'bold_red',
+    }
+    logger = logging.getLogger('logger_name')
+    # 输出到控制台
+    console_handler = logging.StreamHandler()
+    # 输出到文件
+    file_handler = logging.FileHandler(filename='test.log', mode='a', encoding='utf8')
+
+    # 日志级别，logger 和 handler以最高级别为准，不同handler之间可以不一样，不相互影响
+    logger.setLevel(logging.DEBUG)
+    console_handler.setLevel(logging.DEBUG)
+    file_handler.setLevel(logging.INFO)
+
+    # 日志输出格式
+    file_formatter = logging.Formatter(
+        fmt='[%(asctime)s.%(msecs)03d] %(filename)s -> %(funcName)s line:%(lineno)d [%(levelname)s] : %(message)s',
+        datefmt='%Y-%m-%d  %H:%M:%S'
+    )
+    console_formatter = colorlog.ColoredFormatter(
+        fmt='%(log_color)s[%(asctime)s.%(msecs)03d] %(filename)s -> %(funcName)s line:%(lineno)d [%(levelname)s] : %(message)s',
+        datefmt='%Y-%m-%d  %H:%M:%S',
+        log_colors=log_colors_config
+    )
+    console_handler.setFormatter(console_formatter)
+    file_handler.setFormatter(file_formatter)
+
+    # 重复日志问题：
+    # 1、防止多次addHandler；
+    # 2、loggername 保证每次添加的时候不一样；
+    # 3、显示完log之后调用removeHandler
+    if not logger.handlers:
+        logger.addHandler(console_handler)
+        logger.addHandler(file_handler)
+
+    console_handler.close()
+    file_handler.close()
+    return logger
+
+
+@profile
+# GUI 图形化界面
+def setup_gui():
+    root = tk.Tk()
+    root.title("四则运算题目生成器")
+
+    # Generate problem settings
+    frame_generate = tk.Frame(root)
+    frame_generate.pack(pady=10)
+
+    label_num = tk.Label(frame_generate, text="题目数量:")
+    label_num.grid(row=0, column=0, padx=5, pady=5)
+    global entry_num
+    entry_num = tk.Entry(frame_generate)
+    entry_num.grid(row=0, column=1, padx=5, pady=5)
+
+    label_range = tk.Label(frame_generate, text="数值上届:")
+    label_range.grid(row=1, column=0, padx=5, pady=5)
+    global entry_range
+    entry_range = tk.Entry(frame_generate)
+    entry_range.grid(row=1, column=1, padx=5, pady=5)
+
+    button_generate = tk.Button(frame_generate, text="生成题目", command=on_generate)
+    button_generate.grid(row=2, columnspan=2, padx=5, pady=5)
+
+    # Grading function
+    frame_grade = tk.Frame(root)
+    frame_grade.pack(pady=10)
+
+    button_grade = tk.Button(frame_grade, text="判题", command=on_grade)
+    button_grade.pack()
+
+    # Display result
+    global result_text
+    result_text = tk.Text(root, height=15, width=50)
+    result_text.pack(padx=10, pady=10)
+
+    root.mainloop()
 
 
 # 生成表达式
 @profile
 def generate_expression(r):
-    # 生成一个数字
     def generate_number():
-        # 为分数加上括号，确保计算时优先级正确
         if random.choice([True, False]):
             return str(random.randint(1, r))
         else:
             numerator = random.randint(1, r)
-            # denominator = random.randint(2, r)
-            # return f"({numerator}/{denominator})"  # 用括号包裹分数
+            denominator = random.randint(1, r)
+            return f"({numerator}/{denominator})"
 
-            # 定义运算符列表
-            denominator = random.randint(2, r)
-            return f"({numerator}/{denominator})"  # 用括号包裹分数
-
-    # 生成一个运算符
-    ops = ['+', '-', '*', '÷']  # 除法运算使用 ÷ 号
-
-    # 定义一个表达式字符串
+    ops = ['+', '-', '*', '÷']
     expression = generate_number()
-    for _ in range(random.randint(1, 3)):  # 最多3个运算符
+    for _ in range(random.randint(1, 3)):
         op = random.choice(ops)
         next_num = generate_number()
         if random.choice([True, False]):
@@ -38,11 +121,10 @@ def generate_expression(r):
     return expression
 
 
-# 手动解析和计算表达式，使用 Fraction 来保证分数精度
+# Evaluate expression
 @profile
 def evaluate_expression(expr):
     try:
-        # 将 ÷ 替换为 / 并计算
         expr = expr.replace("÷", "/")
         return eval_expr(expr)
     except ZeroDivisionError:
@@ -51,13 +133,11 @@ def evaluate_expression(expr):
         return None
 
 
-# 使用 Fraction 进行 eval 运算，避免使用浮点数
 @profile
 def eval_expr(expr):
-    # 安全地用正则表达式提取出运算符和数值，并将数值转换为 Fraction
     expr = expr.replace(" ", "")
-    expr = re.sub(r'(\d+)', r'Fraction("\1")', expr)  # 替换为 Fraction 类型
-    expr = re.sub(r'\((\d+)/(\d+)\)', r'Fraction("\1", "\2")', expr)  # 真分数解析并加括号
+    expr = re.sub(r'(\d+)', r'Fraction("\1")', expr)
+    expr = re.sub(r'\((\d+)/(\d+)\)', r'Fraction("\1", "\2")', expr)
     try:
         result = eval(expr, {"__builtins__": None}, {"Fraction": Fraction})
         return result
@@ -65,197 +145,225 @@ def eval_expr(expr):
         return None
 
 
-# 检查题目格式和合法性
 @profile
 def is_valid_expression(expr):
-    # 定义一个有效的表达式模式
     valid_pattern = r"^[\d\s\+\-\*÷/\(\)']+$"
-
-    # 如果给定的表达式不符合模式，则返回 False
     if not re.match(valid_pattern, expr):
         return False
-
     if expr.count('(') != expr.count(')'):
         return False
 
     try:
-        # 尝试将给定的表达式评估为一个数值
         result = evaluate_expression(expr)
-        # 如果评估失败，则返回 False
         if result is None:
             return False
     except ZeroDivisionError:
-        # 如果出现了除以零错误，则返回 False
         return False
-
     return True
 
 
-# 生成题目和答案
 @profile
 def generate_exercises(n, r):
-    exercises = [] # 定义一个列表，用于存储生成的练习题
-    answers = [] # 定义一个列表，用于存储答案
-    seen_expressions = set()  # 防止重复
-
-    # 创建 Tkinter 窗口
+    exercises = []
+    answers = []
+    seen_expressions = set()
     answer_set = set()
 
-    # 创建 Tkinter 窗口
-    root = tk.Tk()
-    root.title("加载中...")
-    progress = ttk.Progressbar(root, orient="horizontal", length=300, mode="determinate")
-    progress.pack(pady=20)
-    progress['value'] = 0
-    progress['maximum'] = n
-
-    # 开始生成练习题和答案
     while len(exercises) < n:
-
-        root.update()
-        # 生成一个随机的算式
         expr = generate_expression(r)
-        # 计算该算式的值
         answer = evaluate_expression(expr)
-        # 如果答案不为 None，并且答案不在答案集中，则将答案添加到答案集中
         if n < 1000:
             if answer in answer_set:
                 continue
             answer_set.add(answer)
-        progress['value'] += 1
-        # 如果答案不为 None，则将该算式和答案添加到练习题和答案列表中
+
         if answer is not None:
             normalized_expr = expr.replace(" ", "")
             if normalized_expr not in seen_expressions:
                 exercises.append(expr + " = ")
-                answers.append(str(answer))  # 用分数输出答案
+                answers.append(str(answer))
                 seen_expressions.add(normalized_expr)
-    progress['value'] = n
-    root.destroy()  # 关闭窗口
     return exercises, answers
 
 
-# 生成按钮回调函数
+# 生成题目的界面
 @profile
 def on_generate():
     try:
-        # 从输入框中读取n和r的值
         n = int(entry_num.get())
         r = int(entry_range.get())
-        # 判断输入是否有效
         if n <= 0 or r >= 10 or r <= 0:
             raise ValueError
     except ValueError:
-        # 如果输入不合法，弹出错误提示
         messagebox.showerror("输入错误", "请输入10以内有效的正整数。")
         return
 
-    # 生成n个包含r个选择项的选择题和答案
     exercises, answers = generate_exercises(n, r)
-    # 使用with语句打开两个文件，分别用于保存题目和答案
     with open("Exercises.txt", 'w', encoding='utf-8') as ef, open("Answers.txt", 'w', encoding='utf-8') as af:
-        # 向两个文件中写入题目和答案
         ef.write("\n".join(exercises))
         af.write("\n".join(answers))
 
     result_text.delete(1.0, tk.END)
-    # 在文本框中显示生成的题目和答案
     result_text.insert(tk.END, "生成题目:\n" + "\n".join(exercises))
     messagebox.showinfo("成功", "题目和答案已生成，结果已保存到Exercises.txt和Answers.txt。")
 
 
-# 打开文件
+# Grading button callback
 @profile
-def open_file_dialog(msg_string):
-    filename = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")], title=msg_string)
-    return filename
-
-
-# 判题按钮回调函数
-@profile
-def on_grade():
-    # 打开选择题目文件对话框，并获取题目文件名
-    exercise_file = open_file_dialog('选择题目文件')
-    # 打开选择答案文件对话框，并获取答案文件名
-    answer_file = open_file_dialog('选择答案文件')
-    # 如果题目文件名或答案文件名为空，则弹出错误消息框
-    if not exercise_file or not answer_file:
-        messagebox.showerror("文件错误", "请选择有效的题目文件和答案文件。")
-        return
-    # 打开题目文件，读取题目和答案
+def judge_function(exercise_file, answer_file):
     with open(exercise_file, 'r', encoding='utf-8') as ef, open(answer_file, 'r', encoding='utf-8') as af:
         exercises = ef.readlines()
         answers = af.readlines()
-    # 定义一个列表，用于存储正确的题目序号
+
     correct = []
-    # 定义一个列表，用于存储错误的题目序号
     wrong = []
-    # 定义一个列表，用于存储无效的题目序号
-    invalid = []  # 用于存储无效的题目编号
-    # 遍历题目和答案，进行判题
+    invalid = []
+
     for i, (e, a) in enumerate(zip(exercises, answers), 1):
-        # 分离出等式中的变量
         expr = e.split('=')[0].strip()
-
-        # 检查题目是否合法
         if not is_valid_expression(expr):
-            # 如果题目有效，继续判题
             invalid.append(i)
-            continue  # 跳过这道题的批改
+            continue
 
-        # 如果题目有效，继续判题
         if str(evaluate_expression(expr)) == a.strip():
             correct.append(i)
         else:
             wrong.append(i)
 
     with open('Grade.txt', 'w', encoding='utf-8') as gf:
-        # 向 Grade.txt 文件中写入判题结果
         gf.write(f"Correct: {len(correct)} ({', '.join(map(str, correct))})\n")
         gf.write(f"Wrong: {len(wrong)} ({', '.join(map(str, wrong))})\n")
         if invalid:
             gf.write(f"Invalid: {len(invalid)} ({', '.join(map(str, invalid))})\n")
+    return correct, wrong, invalid
 
-    # 显示判题结果的函数
+
+# 题目判定的界面
+@profile
+def on_grade():
+    exercise_file = open_file_dialog('选择题目文件')
+    answer_file = open_file_dialog('选择答案文件')
+    if not exercise_file or not answer_file:
+        messagebox.showerror("文件错误", "请选择有效的题目文件和答案文件。")
+        return
+
+    correct, wrong, invalid = judge_function(exercise_file, answer_file)
+
     result_text.delete(1.0, tk.END)
-    result_text.insert(tk.END, f"判题结果:\nCorrect: {len(correct)} ({', '.join(map(str, correct))})\n")
-    result_text.insert(tk.END, f"Wrong: {len(wrong)} ({', '.join(map(str, wrong))})\n")
+    result_text.insert(tk.END, f"判题结果:\n答案正确: {len(correct)} ({', '.join(map(str, correct))})\n")
+    result_text.insert(tk.END, f"答案错误: {len(wrong)} ({', '.join(map(str, wrong))})\n")
     if invalid:
-        result_text.insert(tk.END, f"Invalid: {len(invalid)} ({', '.join(map(str, invalid))})\n")
+        result_text.insert(tk.END, f"答案无效: {len(invalid)} ({', '.join(map(str, invalid))})\n")
     messagebox.showinfo("判题结果", "判题完成，结果已保存到Grade.txt。")
 
 
-# 创建主界面
-root = tk.Tk()
-root.title("四则运算题目生成器")
+# Open file dialog
+@profile
+def open_file_dialog(msg_string):
+    filename = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")], title=msg_string)
+    return filename
 
-# 生成题目的设置
-frame_generate = tk.Frame(root)
-frame_generate.pack(pady=10)
 
-label_num = tk.Label(frame_generate, text="题目数量:")
-label_num.grid(row=0, column=0, padx=5, pady=5)
-entry_num = tk.Entry(frame_generate)
-entry_num.grid(row=0, column=1, padx=5, pady=5)
+@profile
+def help_msg():
+    logger.warning("\n命令行方式使用须知"
+          "该四则运算器拥有『题目生成』和『答案校对』两个功能，每次使用都需要提供合适的参数：\n"
+          "- 『题目生成』功能: 命令行输入 python main.py -n [生成的表达式数量] -r [数值上届]\n"
+          "                    要求 [生成的表达式数量] 为正整数，[数值上届] 为 10 以内正整数\n"
+          "- 『答案校对』功能: 命令行输入 python main.py -e [题目路径] -a [答案路径]\n"
+          "                    要求 [题目路径]、[答案路径] 均为对应 .txt 文件的绝对路径")
+@profile
+def wrong_msg():
+    logger.error("选项的参数输入有误，请重新输入。\n输入以下命令可以获得帮助：python main.py -h")
+@profile
+def success_gen_msg():
+    logger.info("\n已随机生成四则运算题目与对应答案，分别存入当前目录下的 Exercises.txt 文件和 Answers.txt 文件")
+@profile
+def success_judge_msg():
+    logger.info("\n判题完成，结果已保存到当前目录下的 Grade.txt")
 
-label_range = tk.Label(frame_generate, text="数值上届:")
-label_range.grid(row=1, column=0, padx=5, pady=5)
-entry_range = tk.Entry(frame_generate)
-entry_range.grid(row=1, column=1, padx=5, pady=5)
 
-button_generate = tk.Button(frame_generate, text="生成题目", command=on_generate)
-button_generate.grid(row=2, columnspan=2, padx=5, pady=5)
 
-# 判题功能
-frame_grade = tk.Frame(root)
-frame_grade.pack(pady=10)
 
-button_grade = tk.Button(frame_grade, text="判题", command=on_grade)
-button_grade.pack()
+# 命令行模式-处理逻辑
+@profile
+def handle_cli_args():
+    number = 0
+    ranging = 0
+    exercise_file = " "
+    answer_file = " "
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "hn:r:e:a:", ["help", "number=", "range=", "exercise_file=", "answer_file="])
+    except:
+        wrong_msg()
+        help_msg()
+        sys.exit()
 
-# 显示结果
-result_text = tk.Text(root, height=15, width=50)
-result_text.pack(padx=10, pady=10)
+    # 从左到右：是否包含生成题目数量、是否包含数值范围上届、是否包含题目路径、是否包含答案路径
+    n_existed, r_existed, e_existed, a_existed = 0, 0, 0, 0
+    for opt, arg in opts:
+        if opt in ("-h", "--help"):  # 显示帮助
+            help_msg()
+            sys.exit()
+        if opt in ("-n", "--number"):
+            try:
+                number = int(arg)
+            except:
+                wrong_msg()
+                sys.exit()
+            if n_existed == 0:
+                n_existed = 1
+        elif opt in ("-r", "--ranging"):
+            try:
+                ranging = int(arg)
+            except:
+                wrong_msg()
+                sys.exit()
+            if r_existed == 0:
+                r_existed = 1
+        elif opt in ("-e", "--exercise_file"):
+            exercise_file = arg
+            if e_existed == 0:
+                e_existed = 1
+        elif opt in ("-a", "--answer_file"):
+            answer_file = arg
+            if a_existed == 0:
+                a_existed = 1
+        else:
+            help_msg()
+            sys.exit()
 
-# 运行主循环
-root.mainloop()
+    # 检测参数输入错误
+    if (r_existed == 1 and n_existed == 0) or (r_existed == 0 and n_existed == 1) \
+            or (e_existed == 1 and a_existed == 0) or (e_existed == 0 and a_existed == 1) or \
+            (r_existed == 0 and n_existed == 0 and e_existed == 0 and a_existed == 0):
+        wrong_msg()
+        sys.exit()
+
+    # 执行生成四则运算题目功能
+    if n_existed and r_existed:
+        exercises, answers = generate_exercises(number, ranging)
+        with open("Exercises.txt", 'w', encoding='utf-8') as ef, open("Answers.txt", 'w', encoding='utf-8') as af:
+            ef.write("\n".join(exercises))
+            af.write("\n".join(answers))
+        success_gen_msg()
+
+    # 执行判定答案对错功能
+    if e_existed and a_existed:
+        correct, wrong, invalid = judge_function(exercise_file, answer_file)
+        print(f"判题结果:\n答案正确: {len(correct)} ({', '.join(map(str, correct))})")
+        print(f"答案错误: {len(wrong)} ({', '.join(map(str, wrong))})")
+        if invalid:
+            print(f"答案无效: {len(invalid)} ({', '.join(map(str, invalid))})")
+        success_judge_msg()
+
+    sys.exit()
+
+
+if __name__ == "__main__":
+    logger = color_logger()
+    if len(sys.argv) > 1:
+        handle_cli_args()
+    else:
+        setup_gui()
+
