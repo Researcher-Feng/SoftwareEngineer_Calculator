@@ -108,28 +108,40 @@ def generate_expression(r):
         else:
             numerator = random.randint(1, r-1)
             denominator = random.randint(1, r-1)
-            return f"({numerator}/{denominator})"
+            return f"{numerator}/{denominator}"
 
-    ops = ['+', '-', '*', '÷']
+    ops = ['+', '-', '×', '÷']
     expression = generate_number()
+    added_parentheses = False  # Flag indicating whether parentheses have been added
+
     for _ in range(random.randint(1, 3)):
         op = random.choice(ops)
         next_num = generate_number()
         if random.choice([True, False]):
             expression = f"({expression} {op} {next_num})"
+            added_parentheses = True  # Set flag to True
             if op == '-':
                 if evaluate_expression(expression) < 0:
                     return -1
         else:
             expression += f" {op} {next_num}"
+            added_parentheses = False  # Keep flag as False if no parentheses are added
+
+    # Remove only the outermost parentheses
+    if added_parentheses and expression.startswith('(') and expression.endswith(')'):
+        expression = expression[1:-1]
+
     return expression
+
 
 
 # Evaluate expression
 @profile
 def evaluate_expression(expr):
     try:
-        expr = expr.replace("÷", "/")
+        expr = re.sub(r'(\d+)/(\d+)', r'(\1/\2)', expr) # put the fraction in parentheses to avoid the error
+        expr = expr.replace("÷", "/")   # Replace division symbol with slash
+        expr = expr.replace("×", "*")   # Replace times symbol with asterisk
         return eval_expr(expr)
     except ZeroDivisionError:
         return None
@@ -141,7 +153,7 @@ def evaluate_expression(expr):
 def eval_expr(expr):
     expr = expr.replace(" ", "")
     expr = re.sub(r'(\d+)', r'Fraction("\1")', expr)
-    expr = re.sub(r'\((\d+)/(\d+)\)', r'Fraction("\1", "\2")', expr)
+    expr = re.sub(r'\((\d+)/(\d+)\)', r'Fraction("\1", "\2")', expr)    # Replace with Fraction type
     try:
         result = eval(expr, {"__builtins__": None}, {"Fraction": Fraction})
         return result
@@ -234,6 +246,7 @@ def on_generate():
     result_text.delete(1.0, tk.END)
     result_text.insert(tk.END, "生成题目:\n" + "\n".join(exercises))
     messagebox.showinfo("成功", "题目和答案已生成，结果已保存到 Exercises.txt 和 Answers.txt")
+
 
 
 # Grading button callback
