@@ -1,3 +1,4 @@
+import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import random
@@ -103,10 +104,10 @@ def setup_gui():
 def generate_expression(r):
     def generate_number():
         if random.choice([True, False]):
-            return str(random.randint(1, r))
+            return str(random.randint(1, r-1))
         else:
-            numerator = random.randint(1, r)
-            denominator = random.randint(1, r)
+            numerator = random.randint(1, r-1)
+            denominator = random.randint(1, r-1)
             return f"({numerator}/{denominator})"
 
     ops = ['+', '-', '*', '÷']
@@ -116,6 +117,9 @@ def generate_expression(r):
         next_num = generate_number()
         if random.choice([True, False]):
             expression = f"({expression} {op} {next_num})"
+            if op == '-':
+                if evaluate_expression(expression) < 0:
+                    return -1
         else:
             expression += f" {op} {next_num}"
     return expression
@@ -163,17 +167,34 @@ def is_valid_expression(expr):
 
 
 @profile
-def generate_exercises(n, r):
+def generate_exercises(n, r, bar=False):
     exercises = []
     answers = []
     seen_expressions = set()
     answer_set = set()
+    progress = None
+    root = None
+
+    if bar:
+        # 创建 Tkinter 窗口
+        root = tk.Tk()
+        root.title("加载中...")
+        progress = ttk.Progressbar(root, orient="horizontal", length=300, mode="determinate")
+        progress.pack(pady=20)
+        progress['value'] = 0
+        progress['maximum'] = n
 
     while len(exercises) < n:
         expr = generate_expression(r)
+        if expr == -1:
+            continue
         answer = evaluate_expression(expr)
         if n < 1000:
-            if answer in answer_set:
+            if answer in answer_set or answer < 0:
+                continue
+            answer_set.add(answer)
+        if n < 80000:
+            if answer < 0:
                 continue
             answer_set.add(answer)
 
@@ -183,6 +204,13 @@ def generate_exercises(n, r):
                 exercises.append(expr + " = ")
                 answers.append(str(answer))
                 seen_expressions.add(normalized_expr)
+                if bar:
+                    progress['value'] += 1  # 更新进度条
+                    root.update()  # 更新窗口以反映进度条变化
+    if bar:
+        progress['value'] = n
+        time.sleep(0.002)
+        root.destroy()  # 关闭窗口
     return exercises, answers
 
 
@@ -192,20 +220,20 @@ def on_generate():
     try:
         n = int(entry_num.get())
         r = int(entry_range.get())
-        if n <= 0 or r >= 10 or r <= 0:
+        if n <= 0 or r > 10 or r <= 1:
             raise ValueError
     except ValueError:
-        messagebox.showerror("输入错误", "请输入10以内有效的正整数。")
+        messagebox.showerror("输入错误", "[题目数量]请输入正整数；[数值上界]请输入大于1、小于等于10的正整数。")
         return
 
-    exercises, answers = generate_exercises(n, r)
+    exercises, answers = generate_exercises(n, r, bar=True)
     with open("Exercises.txt", 'w', encoding='utf-8') as ef, open("Answers.txt", 'w', encoding='utf-8') as af:
         ef.write("\n".join(exercises))
         af.write("\n".join(answers))
 
     result_text.delete(1.0, tk.END)
     result_text.insert(tk.END, "生成题目:\n" + "\n".join(exercises))
-    messagebox.showinfo("成功", "题目和答案已生成，结果已保存到Exercises.txt和Answers.txt。")
+    messagebox.showinfo("成功", "题目和答案已生成，结果已保存到 Exercises.txt 和 Answers.txt")
 
 
 # Grading button callback
@@ -250,11 +278,11 @@ def on_grade():
     correct, wrong, invalid = judge_function(exercise_file, answer_file)
 
     result_text.delete(1.0, tk.END)
-    result_text.insert(tk.END, f"判题结果:\n答案正确: {len(correct)} ({', '.join(map(str, correct))})\n")
-    result_text.insert(tk.END, f"答案错误: {len(wrong)} ({', '.join(map(str, wrong))})\n")
+    result_text.insert(tk.END, f"判题结果:\nCorrect: {len(correct)} ({', '.join(map(str, correct))})\n")
+    result_text.insert(tk.END, f"Wrong: {len(wrong)} ({', '.join(map(str, wrong))})\n")
     if invalid:
-        result_text.insert(tk.END, f"答案无效: {len(invalid)} ({', '.join(map(str, invalid))})\n")
-    messagebox.showinfo("判题结果", "判题完成，结果已保存到Grade.txt。")
+        result_text.insert(tk.END, f"Invalid: {len(invalid)} ({', '.join(map(str, invalid))})\n")
+    messagebox.showinfo("判题结果", "判题完成，结果已保存到 Grade.txt。")
 
 
 # Open file dialog
@@ -269,20 +297,9 @@ def help_msg():
     logger.warning("\n命令行方式使用须知"
           "该四则运算器拥有『题目生成』和『答案校对』两个功能，每次使用都需要提供合适的参数：\n"
           "- 『题目生成』功能: 命令行输入 python main.py -n [生成的表达式数量] -r [数值上届]\n"
-          "                    要求 [生成的表达式数量] 为正整数，[数值上届] 为 10 以内正整数\n"
+          "                    要求 [生成的表达式数量] 为正整数，[数值上界] 为 大于1、小于10的正整数\n"
           "- 『答案校对』功能: 命令行输入 python main.py -e [题目路径] -a [答案路径]\n"
           "                    要求 [题目路径]、[答案路径] 均为对应 .txt 文件的绝对路径")
-@profile
-def wrong_msg():
-    logger.error("选项的参数输入有误，请重新输入。\n输入以下命令可以获得帮助：python main.py -h")
-@profile
-def success_gen_msg():
-    logger.info("\n已随机生成四则运算题目与对应答案，分别存入当前目录下的 Exercises.txt 文件和 Answers.txt 文件")
-@profile
-def success_judge_msg():
-    logger.info("\n判题完成，结果已保存到当前目录下的 Grade.txt")
-
-
 
 
 # 命令行模式-处理逻辑
@@ -295,8 +312,7 @@ def handle_cli_args():
     try:
         opts, args = getopt.getopt(sys.argv[1:], "hn:r:e:a:", ["help", "number=", "range=", "exercise_file=", "answer_file="])
     except:
-        wrong_msg()
-        help_msg()
+        logger.error("选项的参数输入有误，请重新输入。\n输入以下命令可以获得帮助：python main.py -h")
         sys.exit()
 
     # 从左到右：是否包含生成题目数量、是否包含数值范围上届、是否包含题目路径、是否包含答案路径
@@ -308,16 +324,22 @@ def handle_cli_args():
         if opt in ("-n", "--number"):
             try:
                 number = int(arg)
+                if number <= 0:
+                    logger.error("选项的参数输入有误，请重新输入。\n输入以下命令可以获得帮助：python main.py -h")
+                    return
             except:
-                wrong_msg()
+                logger.error("选项的参数输入有误，请重新输入。\n输入以下命令可以获得帮助：python main.py -h")
                 sys.exit()
             if n_existed == 0:
                 n_existed = 1
         elif opt in ("-r", "--ranging"):
             try:
                 ranging = int(arg)
+                if ranging > 10 or ranging <= 1:
+                    logger.error("选项的参数输入有误，请重新输入。\n输入以下命令可以获得帮助：python main.py -h")
+                    return
             except:
-                wrong_msg()
+                logger.error("选项的参数输入有误，请重新输入。\n输入以下命令可以获得帮助：python main.py -h")
                 sys.exit()
             if r_existed == 0:
                 r_existed = 1
@@ -337,7 +359,7 @@ def handle_cli_args():
     if (r_existed == 1 and n_existed == 0) or (r_existed == 0 and n_existed == 1) \
             or (e_existed == 1 and a_existed == 0) or (e_existed == 0 and a_existed == 1) or \
             (r_existed == 0 and n_existed == 0 and e_existed == 0 and a_existed == 0):
-        wrong_msg()
+        logger.error("选项的参数输入有误，请重新输入。\n输入以下命令可以获得帮助：python main.py -h")
         sys.exit()
 
     # 执行生成四则运算题目功能
@@ -346,16 +368,16 @@ def handle_cli_args():
         with open("Exercises.txt", 'w', encoding='utf-8') as ef, open("Answers.txt", 'w', encoding='utf-8') as af:
             ef.write("\n".join(exercises))
             af.write("\n".join(answers))
-        success_gen_msg()
+        logger.info("\n已随机生成四则运算题目与对应答案，分别存入当前目录下的 Exercises.txt 文件和 Answers.txt 文件")
 
     # 执行判定答案对错功能
     if e_existed and a_existed:
         correct, wrong, invalid = judge_function(exercise_file, answer_file)
-        print(f"判题结果:\n答案正确: {len(correct)} ({', '.join(map(str, correct))})")
-        print(f"答案错误: {len(wrong)} ({', '.join(map(str, wrong))})")
+        print(f"判题结果:\nCorrect: {len(correct)} ({', '.join(map(str, correct))})")
+        print(f"Wrong: {len(wrong)} ({', '.join(map(str, wrong))})")
         if invalid:
-            print(f"答案无效: {len(invalid)} ({', '.join(map(str, invalid))})")
-        success_judge_msg()
+            print(f"Invalid: {len(invalid)} ({', '.join(map(str, invalid))})")
+        logger.info("\n判题完成，结果已保存到当前目录下的 Grade.txt")
 
     sys.exit()
 
