@@ -208,10 +208,12 @@ def eval_expr(expr):
 
 @profile
 def is_valid_expression(expr):
-    valid_pattern = r"^[\d\s\+\-\×÷/\(\)']+$"
+    valid_pattern = r"^(?!(?:.*[\+\-\×÷*/]{2,}))[0-9\s\+\-\×÷*/\(\)']+$"
     if not re.match(valid_pattern, expr):
         return False
     if expr.count('(') != expr.count(')'):
+        return False
+    if expr.strip()[-1] in '+-×÷*/':
         return False
 
     try:
