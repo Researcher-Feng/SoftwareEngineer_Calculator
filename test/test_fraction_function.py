@@ -1,0 +1,38 @@
+import unittest
+from fractions import Fraction
+from main import convert_mixed_to_fraction, convert_fraction_to_mixed
+
+
+class TestConversionFunctions(unittest.TestCase):
+
+    def test_convert_mixed_to_fraction(self):
+        """Test the conversion of mixed numbers to fractions"""
+        # 测试混合数转换为分数
+        self.assertEqual(convert_mixed_to_fraction("3'1/2"), "7/2")
+        self.assertEqual(convert_mixed_to_fraction("2'3/4"), "11/4")
+        self.assertEqual(convert_mixed_to_fraction("0'1/3"), "1/3")
+
+        # 测试多个混合数的转换
+        self.assertEqual(convert_mixed_to_fraction("3'1/2 + 1'1/4"), "7/2 + 5/4")
+
+        # 测试没有混合数的表达式应该保持不变
+        self.assertEqual(convert_mixed_to_fraction("5/2 + 1/4"), "5/2 + 1/4")
+
+    def test_convert_fraction_to_mixed(self):
+        """Test the conversion of fractions to mixed numbers"""
+        # 测试分数转换为混合数
+        self.assertEqual(convert_fraction_to_mixed("7/2"), "3'1/2")
+        self.assertEqual(convert_fraction_to_mixed("11/4"), "2'3/4")
+        self.assertEqual(convert_fraction_to_mixed("1/3"), "1/3")
+
+        # 测试分数转换为整数
+        self.assertEqual(convert_fraction_to_mixed("6/3"), "2")
+
+
+        # 测试无效输入
+        self.assertIsNone(convert_fraction_to_mixed("5/a"))
+        self.assertIsNone(convert_fraction_to_mixed("1/0"))  # 分母为零的情况
+
+
+if __name__ == '__main__':
+    unittest.main()
