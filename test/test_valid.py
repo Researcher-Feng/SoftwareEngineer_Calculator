@@ -1,5 +1,5 @@
 import unittest
-from main import is_valid_expression  # Replace with the actual module name
+from main import is_valid_expression
 
 
 class TestIsValidExpression(unittest.TestCase):
