@@ -239,9 +239,14 @@ def on_generate():
         return
 
     exercises, answers = generate_exercises(n, r, bar=True)
+
+    # Adding numbering to exercises and answers
+    numbered_exercises = [f"{i + 1}. {exercise}" for i, exercise in enumerate(exercises)]
+    numbered_answers = [f"{i + 1}. {answer}" for i, answer in enumerate(answers)]
+
     with open("Exercises.txt", 'w', encoding='utf-8') as ef, open("Answers.txt", 'w', encoding='utf-8') as af:
-        ef.write("\n".join(exercises))
-        af.write("\n".join(answers))
+        ef.write("\n".join(numbered_exercises))
+        af.write("\n".join(numbered_answers))
 
     result_text.delete(1.0, tk.END)
     result_text.insert(tk.END, "生成题目:\n" + "\n".join(exercises))
@@ -261,12 +266,14 @@ def judge_function(exercise_file, answer_file):
     invalid = []
 
     for i, (e, a) in enumerate(zip(exercises, answers), 1):
-        expr = e.split('=')[0].strip()
+        # Remove the numbering from exercises and answers
+        expr = e.split('.', 1)[-1].split('=')[0].strip()  # Get expression without the number
+        answer = a.split('.', 1)[-1].strip()  # Get answer without the number
         if not is_valid_expression(expr):
             invalid.append(i)
             continue
 
-        if str(evaluate_expression(expr)) == a.strip():
+        if str(evaluate_expression(expr)) == answer:
             correct.append(i)
         else:
             wrong.append(i)
