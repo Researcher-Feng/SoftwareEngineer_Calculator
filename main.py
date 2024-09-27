@@ -98,6 +98,48 @@ def setup_gui():
 
     root.mainloop()
 
+# 分数和除法的格式化
+def convert_mixed_to_fraction(expr):
+    # 表达式正则化
+    mixed_pattern = r'(\d+)\'(\d+)/(\d+)'
+
+    def replace_func(match):
+        whole = int(match.group(1))
+        numerator = int(match.group(2))
+        denominator = int(match.group(3))
+        # 计算
+        return str(Fraction(whole * denominator + numerator, denominator))
+
+    # 返回格式化后的除法表达式
+    return re.sub(mixed_pattern, replace_func, expr)
+
+
+# 分数和除法的逆向格式化（转带分数）
+def convert_fraction_to_mixed(fraction_str):
+    # 输入处理
+    if '/' not in fraction_str:
+        return fraction_str  # If it's not a fraction, return as is
+
+    # 除法表达式拆分
+    try:
+        numerator, denominator = map(int, fraction_str.split('/'))
+    except ValueError:
+        return None  # 处理非整数
+
+    if denominator == 0:
+        return None  # 处理特殊情况
+
+    whole = numerator // denominator
+    remainder = abs(numerator) % denominator  # 用绝对值处理负数情况
+
+    if whole == 0:
+        return f"{remainder}/{denominator}"  # 真分数
+    elif remainder == 0:
+        return str(whole)  # 纯数字
+    else:
+        return f"{whole}'{remainder}/{denominator}"  # 带分数
+
+
 
 # 生成表达式
 @profile
@@ -108,28 +150,42 @@ def generate_expression(r):
         else:
             numerator = random.randint(1, r-1)
             denominator = random.randint(1, r-1)
-            return f"({numerator}/{denominator})"
+            return convert_fraction_to_mixed(f"{numerator}/{denominator}")
+            # return f"{numerator}/{denominator}"
 
-    ops = ['+', '-', '*', '÷']
+    ops = ['+', '-', '×', '÷']
     expression = generate_number()
+    added_parentheses = False  # 设置一个 Flag
+
     for _ in range(random.randint(1, 3)):
         op = random.choice(ops)
         next_num = generate_number()
         if random.choice([True, False]):
             expression = f"({expression} {op} {next_num})"
+            added_parentheses = True  # Set flag to True
             if op == '-':
                 if evaluate_expression(expression) < 0:
                     return -1
         else:
             expression += f" {op} {next_num}"
+            added_parentheses = False  # 设置 flag 为 False
+
+    # 删除多余的括号
+    if added_parentheses and expression.startswith('(') and expression.endswith(')'):
+        expression = expression[1:-1]
+
     return expression
 
 
-# Evaluate expression
+
+# 验证表达式
 @profile
 def evaluate_expression(expr):
     try:
-        expr = expr.replace("÷", "/")
+        expr = convert_mixed_to_fraction(expr)  # 分数和除法的格式化
+        expr = re.sub(r'(\d+)/(\d+)', r'(\1/\2)', expr) # 分数处理
+        expr = expr.replace("÷", "/")   # 除号替换
+        expr = expr.replace("×", "*")   # 乘号替换
         return eval_expr(expr)
     except ZeroDivisionError:
         return None
@@ -141,7 +197,7 @@ def evaluate_expression(expr):
 def eval_expr(expr):
     expr = expr.replace(" ", "")
     expr = re.sub(r'(\d+)', r'Fraction("\1")', expr)
-    expr = re.sub(r'\((\d+)/(\d+)\)', r'Fraction("\1", "\2")', expr)
+    expr = re.sub(r'\((\d+)/(\d+)\)', r'Fraction("\1", "\2")', expr)    # Replace with Fraction type
     try:
         result = eval(expr, {"__builtins__": None}, {"Fraction": Fraction})
         return result
@@ -151,10 +207,12 @@ def eval_expr(expr):
 
 @profile
 def is_valid_expression(expr):
-    valid_pattern = r"^[\d\s\+\-\*÷/\(\)']+$"
+    valid_pattern = r"^(?!(?:.*[\+\-\×÷*/]{2,}))[0-9\s\+\-\×÷*/\(\)']+$"
     if not re.match(valid_pattern, expr):
         return False
     if expr.count('(') != expr.count(')'):
+        return False
+    if expr.strip()[-1] in '+-×÷*/':
         return False
 
     try:
@@ -189,14 +247,13 @@ def generate_exercises(n, r, bar=False):
         if expr == -1:
             continue
         answer = evaluate_expression(expr)
-        if n < 1000:
-            if answer in answer_set or answer < 0:
-                continue
-            answer_set.add(answer)
-        if n < 80000:
-            if answer < 0:
-                continue
-            answer_set.add(answer)
+
+        if answer < 0:
+            continue
+        answer = convert_fraction_to_mixed(str(answer))
+        if answer in answer_set:
+            continue
+        answer_set.add(answer)
 
         if answer is not None:
             normalized_expr = expr.replace(" ", "")
@@ -211,7 +268,12 @@ def generate_exercises(n, r, bar=False):
         progress['value'] = n
         time.sleep(0.002)
         root.destroy()  # 关闭窗口
-    return exercises, answers
+
+    # 行号
+    numbered_exercises = [f"{i + 1}. {exercise}" for i, exercise in enumerate(exercises)]
+    numbered_answers = [f"{i + 1}. {answer}" for i, answer in enumerate(answers)]
+
+    return numbered_exercises, numbered_answers
 
 
 # 生成题目的界面
@@ -227,6 +289,7 @@ def on_generate():
         return
 
     exercises, answers = generate_exercises(n, r, bar=True)
+
     with open("Exercises.txt", 'w', encoding='utf-8') as ef, open("Answers.txt", 'w', encoding='utf-8') as af:
         ef.write("\n".join(exercises))
         af.write("\n".join(answers))
@@ -236,7 +299,8 @@ def on_generate():
     messagebox.showinfo("成功", "题目和答案已生成，结果已保存到 Exercises.txt 和 Answers.txt")
 
 
-# Grading button callback
+
+# 答案校对
 @profile
 def judge_function(exercise_file, answer_file):
     with open(exercise_file, 'r', encoding='utf-8') as ef, open(answer_file, 'r', encoding='utf-8') as af:
@@ -248,15 +312,19 @@ def judge_function(exercise_file, answer_file):
     invalid = []
 
     for i, (e, a) in enumerate(zip(exercises, answers), 1):
-        expr = e.split('=')[0].strip()
+        # Remove the numbering from exercises and answers
+        expr = e.split('.', 1)[-1].split('=')[0].strip()  # Get expression without the number
+        answer = a.split('.', 1)[-1].strip()  # Get answer without the number
+
         if not is_valid_expression(expr):
             invalid.append(i)
             continue
 
-        if str(evaluate_expression(expr)) == a.strip():
+        if str(evaluate_expression(expr)) == convert_mixed_to_fraction(answer):
             correct.append(i)
         else:
             wrong.append(i)
+
 
     with open('Grade.txt', 'w', encoding='utf-8') as gf:
         gf.write(f"Correct: {len(correct)} ({', '.join(map(str, correct))})\n")
@@ -360,6 +428,7 @@ def handle_cli_args():
             or (e_existed == 1 and a_existed == 0) or (e_existed == 0 and a_existed == 1) or \
             (r_existed == 0 and n_existed == 0 and e_existed == 0 and a_existed == 0):
         logger.error("选项的参数输入有误，请重新输入。\n输入以下命令可以获得帮助：python main.py -h")
+        help_msg()
         sys.exit()
 
     # 执行生成四则运算题目功能
