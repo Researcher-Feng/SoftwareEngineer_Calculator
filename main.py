@@ -98,6 +98,49 @@ def setup_gui():
 
     root.mainloop()
 
+# Convert mixed number to fraction
+def convert_mixed_to_fraction(expr):
+    # Regular expression to match mixed numbers
+    mixed_pattern = r'(\d+)\'(\d+)/(\d+)'
+
+    def replace_func(match):
+        whole = int(match.group(1))
+        numerator = int(match.group(2))
+        denominator = int(match.group(3))
+        # Calculate and return the corresponding fraction
+        return str(Fraction(whole * denominator + numerator, denominator))
+
+    # Replace mixed numbers with fractions
+    return re.sub(mixed_pattern, replace_func, expr)
+
+
+# Convert fraction to mixed number
+def convert_fraction_to_mixed(fraction_str):
+    """Convert a string representation of a fraction to a mixed number."""
+    # Handle improper input
+    if '/' not in fraction_str:
+        return fraction_str  # If it's not a fraction, return as is
+
+    # Split the fraction string into numerator and denominator
+    try:
+        numerator, denominator = map(int, fraction_str.split('/'))
+    except ValueError:
+        return None  # Handle non-integer values
+
+    if denominator == 0:
+        return None  # Handle the case of denominator being zero
+
+    whole = numerator // denominator
+    remainder = abs(numerator) % denominator  # Use abs to handle negative numerators
+
+    if whole == 0:
+        return f"{remainder}/{denominator}"  # Proper fraction
+    elif remainder == 0:
+        return str(whole)  # Whole number
+    else:
+        return f"{whole}'{remainder}/{denominator}"  # Mixed number
+
+
 
 # 生成表达式
 @profile
@@ -108,7 +151,8 @@ def generate_expression(r):
         else:
             numerator = random.randint(1, r-1)
             denominator = random.randint(1, r-1)
-            return f"{numerator}/{denominator}"
+            return convert_fraction_to_mixed(f"{numerator}/{denominator}")
+            # return f"{numerator}/{denominator}"
 
     ops = ['+', '-', '×', '÷']
     expression = generate_number()
@@ -139,6 +183,7 @@ def generate_expression(r):
 @profile
 def evaluate_expression(expr):
     try:
+        expr = convert_mixed_to_fraction(expr)  # Convert mixed numbers to fractions
         expr = re.sub(r'(\d+)/(\d+)', r'(\1/\2)', expr) # put the fraction in parentheses to avoid the error
         expr = expr.replace("÷", "/")   # Replace division symbol with slash
         expr = expr.replace("×", "*")   # Replace times symbol with asterisk
@@ -163,7 +208,7 @@ def eval_expr(expr):
 
 @profile
 def is_valid_expression(expr):
-    valid_pattern = r"^[\d\s\+\-\*÷/\(\)']+$"
+    valid_pattern = r"^[\d\s\+\-\×÷/\(\)']+$"
     if not re.match(valid_pattern, expr):
         return False
     if expr.count('(') != expr.count(')'):
@@ -201,14 +246,14 @@ def generate_exercises(n, r, bar=False):
         if expr == -1:
             continue
         answer = evaluate_expression(expr)
-        if n < 1000:
-            if answer in answer_set or answer < 0:
-                continue
-            answer_set.add(answer)
-        if n < 80000:
-            if answer < 0:
-                continue
-            answer_set.add(answer)
+
+        if answer < 0:
+            continue
+        answer = convert_fraction_to_mixed(str(answer))
+        if answer in answer_set:
+            continue
+        answer_set.add(answer)
+
 
         if answer is not None:
             normalized_expr = expr.replace(" ", "")
@@ -223,6 +268,7 @@ def generate_exercises(n, r, bar=False):
         progress['value'] = n
         time.sleep(0.002)
         root.destroy()  # 关闭窗口
+
     return exercises, answers
 
 
@@ -269,14 +315,16 @@ def judge_function(exercise_file, answer_file):
         # Remove the numbering from exercises and answers
         expr = e.split('.', 1)[-1].split('=')[0].strip()  # Get expression without the number
         answer = a.split('.', 1)[-1].strip()  # Get answer without the number
+
         if not is_valid_expression(expr):
             invalid.append(i)
             continue
 
-        if str(evaluate_expression(expr)) == answer:
+        if str(evaluate_expression(expr)) == convert_mixed_to_fraction(answer):
             correct.append(i)
         else:
             wrong.append(i)
+
 
     with open('Grade.txt', 'w', encoding='utf-8') as gf:
         gf.write(f"Correct: {len(correct)} ({', '.join(map(str, correct))})\n")
