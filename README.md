@@ -60,7 +60,7 @@ python main.py -e [题目路径] -a [答案路径]
 
 主目录下选择`main.py`，点击运行按钮开始程序的执行，进入主界面
 
-![Snipaste_2024-09-25_14-28-39](D:\我的文档\Desktop\学校\软件工程\作业\3结对项目\UI界面\Snipaste_2024-09-25_14-28-39.jpg)
+![Snipaste_2024-09-25_14-28-39](https://github.com/user-attachments/assets/5f43222a-db65-4108-ae16-0d427fb9e90b)
 
 ##### 2.生成题目功能
 
@@ -69,9 +69,7 @@ python main.py -e [题目路径] -a [答案路径]
 3. 等待程序完成
 4. 最后查看当前目录下的`Exercises.txt`和`Answers.txt`，即生成的文件
 
-![2](D:\我的文档\Desktop\学校\软件工程\作业\3结对项目\UI界面\2.jpg)
-
-![Snipaste_2024-09-25_14-51-11](D:\我的文档\Desktop\学校\软件工程\作业\3结对项目\UI界面\Snipaste_2024-09-25_14-51-11.jpg)
+![2](https://github.com/user-attachments/assets/5026327b-b00d-40c4-b8fa-49b459effc45)
 
 ##### 3.判题功能
 
@@ -80,6 +78,3 @@ python main.py -e [题目路径] -a [答案路径]
 3. 等待程序完成
 4. 最后查看当前目录下的`Grade.txt`，即生成的文件
 
-![Snipaste_2024-09-25_14-29-28](D:\我的文档\Desktop\学校\软件工程\作业\3结对项目\UI界面\Snipaste_2024-09-25_14-29-28.jpg)
-
-![Snipaste_2024-09-25_14-30-08](D:\我的文档\Desktop\学校\软件工程\作业\3结对项目\UI界面\Snipaste_2024-09-25_14-30-08.jpg)
